@@ -17,7 +17,7 @@ espNowFloodingMesh_RecvCB	KEYWORD2
 espNowFloodingMesh_send	KEYWORD2
 espNowFloodingMesh_secredkey	KEYWORD2
 espNowFloodingMesh_requestInstantTimeSyncFromMaster	KEYWORD2
-espNowFloodingMesh_isSyncedWithMaster	KEYWORD2
+espNowFloodingMesh_syncWithMasterAndWait	KEYWORD2
 espNowFloodingMesh_loop	KEYWORD2
 
 #######################################
