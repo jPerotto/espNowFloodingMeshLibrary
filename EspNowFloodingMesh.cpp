@@ -46,6 +46,9 @@ uint8_t syncTTL = 0;
 bool isespNowFloodingMeshInitialized = false;
 time_t time_fix_value;
 int myBsid = 0x112233;
+void (*errorPrintCB)(int, const char *) = NULL;
+unsigned char broadcast_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+uint8_t aes_secredKey[] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
 
 #pragma pack(push, 1)
 struct header
@@ -99,19 +102,6 @@ int espNowFloodingMesh_getTTL()
 {
   return syncTTL;
 }
-const unsigned char broadcast_mac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-uint8_t aes_secredKey[] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
-bool forwardMsg(const uint8_t *data, int len);
-uint32_t sendMsg(uint8_t *msg, int size, int ttl, int msgId, void *ptr = NULL);
-void hexDump(const uint8_t *b, int len);
-static void (*espNowFloodingMesh_receive_cb)(const uint8_t *, int, uint32_t) = NULL;
-
-uint16_t calculateCRC(int c, const unsigned char *b, int len);
-uint16_t calculateCRC(struct meshFrame *m);
-int decrypt(const uint8_t *_from, struct meshFrame *m, int size);
-bool compareTime(time_t current, time_t received, time_t maxDifference);
-
-void (*errorPrintCB)(int, const char *) = NULL;
 
 void espNowFloodingMesh_ErrorDebugCB(void (*callback)(int, const char *))
 {
@@ -335,7 +325,7 @@ void espNowFloodingMesh_loop()
       Serial.println("Send time sync message!!");
 #endif
       print(3, "Send time sync message.");
-      sendMsg(NULL, 0, syncTTL, SYNC_TIME_MSG);
+      sendMsg((uint8_t*)broadcast_mac, NULL, 0, syncTTL, SYNC_TIME_MSG);
     }
   }
   { //Clean data base
@@ -428,7 +418,7 @@ void espNowFloodingMesh_setRTCTime(time_t time)
   if (masterFlag)
   {
     print(3, "Send time sync");
-    sendMsg(NULL, 0, syncTTL, SYNC_TIME_MSG);
+    sendMsg((uint8_t*)broadcast_mac, NULL, 0, syncTTL, SYNC_TIME_MSG);
   }
 }
 time_t espNowFloodingMesh_getRTCTime()
@@ -446,7 +436,7 @@ void espNowFloodingMesh_setRTCTime(time_t t)
   if (masterFlag)
   {
     print(3, "Send time sync");
-    sendMsg(NULL, 0, syncTTL, SYNC_TIME_MSG);
+    sendMsg((uint8_t*)broadcast_mac, NULL, 0, syncTTL, SYNC_TIME_MSG);
   }
 }
 time_t espNowFloodingMesh_getRTCTime()
@@ -623,7 +613,7 @@ void msg_recv_cb(const uint8_t *data, int len)
 #ifdef DEBUG_PRINTS
             Serial.println("Send time sync message!! (Requested)");
 #endif
-            sendMsg(NULL, 0, syncTTL, SYNC_TIME_MSG);
+            sendMsg((uint8_t*)broadcast_mac, NULL, 0, syncTTL, SYNC_TIME_MSG);
             //print(3,"Send time sync message!! (Requested)");
           }
         }
@@ -704,7 +694,7 @@ void espNowFloodingMesh_requestInstantTimeSyncFromMaster()
 #ifdef DEBUG_PRINTS
   Serial.println("Request instant time sync from master.");
 #endif
-  sendMsg(NULL, 0, 0, INSTANT_TIME_SYNC_REQ);
+  sendMsg((uint8_t*)broadcast_mac, NULL, 0, 0, INSTANT_TIME_SYNC_REQ);
 }
 
 void espNowFloodingMesh_end()
@@ -841,12 +831,12 @@ bool forwardMsg(const uint8_t *data, int len)
 #ifdef USE_RAW_801_11
   wifi_802_11_send((uint8_t *)(&m), len);
 #else
-  espnowBroadcast_send((uint8_t *)(&m), len);
+  espnowBroadcast_send((uint8_t*)broadcast_mac, (uint8_t *)(&m), len);
 #endif
   return true;
 }
 
-uint32_t sendMsg(uint8_t *msg, int size, int ttl, int msgId, void *ptr)
+uint32_t sendMsg(uint8_t *macAddr, uint8_t *msg, int size, int ttl, int msgId, void *ptr)
 {
   uint32_t ret = 0;
   if (size >= sizeof(struct mesh_secred_part))
@@ -910,24 +900,24 @@ Serial.print("--->:");
 #ifdef USE_RAW_801_11
   wifi_802_11_send((uint8_t *)&m, sendSize);
 #else
-  espnowBroadcast_send((uint8_t *)&m, sendSize);
+  espnowBroadcast_send(macAddr, (uint8_t *)&m, sendSize);
 #endif
   return ret;
 }
 
-void espNowFloodingMesh_send(uint8_t *msg, int size, int ttl)
+void espNowFloodingMesh_send(uint8_t *macAddr, uint8_t *msg, int size, int ttl)
 {
-  sendMsg(msg, size, ttl, USER_MSG);
+  sendMsg(macAddr, msg, size, ttl, USER_MSG);
 }
 
-void espNowFloodingMesh_sendReply(uint8_t *msg, int size, int ttl, uint32_t replyIdentifier)
+void espNowFloodingMesh_sendReply(uint8_t *macAddr, uint8_t *msg, int size, int ttl, uint32_t replyIdentifier)
 {
-  sendMsg(msg, size, ttl, USER_REQUIRE_REPLY_MSG, (void *)&replyIdentifier);
+  sendMsg(macAddr, msg, size, ttl, USER_REQUIRE_REPLY_MSG, (void *)&replyIdentifier);
 }
 
-uint32_t espNowFloodingMesh_sendAndHandleReply(uint8_t *msg, int size, int ttl, void (*f)(const uint8_t *, int))
+uint32_t espNowFloodingMesh_sendAndHandleReply(uint8_t *macAddr, uint8_t *msg, int size, int ttl, void (*f)(const uint8_t *, int))
 {
-  return sendMsg(msg, size, ttl, USER_REQUIRE_RESPONSE_MSG, (void *)f);
+  return sendMsg(macAddr, msg, size, ttl, USER_REQUIRE_RESPONSE_MSG, (void *)f);
 }
 
 bool espNowFloodingMesh_sendAndWaitReply(uint8_t *msg, int size, int ttl, int tryCount, void (*f)(const uint8_t *, int), int timeoutMs, int expectedCountOfReplies)
@@ -938,7 +928,7 @@ bool espNowFloodingMesh_sendAndWaitReply(uint8_t *msg, int size, int ttl, int tr
 
   for (int i = 0; i < tryCount; i++)
   {
-    espNowFloodingMesh_sendAndHandleReply(msg, size, ttl, [](const uint8_t *data, int len) {
+    espNowFloodingMesh_sendAndHandleReply((uint8_t*)broadcast_mac, msg, size, ttl, [](const uint8_t *data, int len) {
       if (callback != NULL)
       {
         callback(data, len);

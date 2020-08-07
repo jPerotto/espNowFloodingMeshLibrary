@@ -65,7 +65,7 @@ void espnowBroadcast_begin(int channel)
   init_done = true;
 }
 
-void espnowBroadcast_send(const uint8_t *d, int len)
+void espnowBroadcast_send(uint8_t* macAddr, const uint8_t *d, int len)
 {
   if (init_done == false)
   {
@@ -73,9 +73,9 @@ void espnowBroadcast_send(const uint8_t *d, int len)
     return;
   }
 #ifdef ESP32
-  esp_now_send(broadcast_mac, (uint8_t *)(d), len);
+  esp_now_send(macAddr, (uint8_t *)(d), len);
 #else
-  esp_now_send((u8 *)broadcast_mac, (u8 *)(d), len);
+  esp_now_send((u8 *)macAddr, (u8 *)(d), len);
 #endif
 }
 void espnowBroadcast_cb(void (*cb)(const uint8_t *, int))
